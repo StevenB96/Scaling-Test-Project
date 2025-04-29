@@ -23,11 +23,11 @@ dist/
 build/
 
 # Docker specific
-.docker/
-docker-compose.override.yml
-Dockerfile.*
+# .docker/
+# docker-compose.override.yml
+# Dockerfile.*
 .dockerignore
-docker-compose.yml
+# docker-compose.yml
 
 # IDE/Editor specific files
 .vscode/

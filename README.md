@@ -17,7 +17,7 @@ This stack implements a price-tracking application that tracks product prices fr
 
 ### 2. **Flask Backend API**
    - **Backend Services (`backend` and `backend2`)**: Handle product-related requests (e.g., viewing, tracking).
-   - **Nginx Load Balancer (`api-lb`)**: Balances traffic between the two backend services for load distribution and fault tolerance.
+   - **Nginx Load Balancer (`backend-lb`)**: Balances traffic between the two backend services for load distribution and fault tolerance.
 
 ### 3. **Celery Workers**
    - **Celery Worker Services (`celery_worker1` and `celery_worker2`)**: Asynchronously scrape product prices from e-commerce sites and update the MongoDB database.

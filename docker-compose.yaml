@@ -41,6 +41,7 @@ services:
       - "27017:27017"  # Expose mongos service on port 27017
     networks:
       - mongo-cluster
+      - backend-network  # Add mongos to backend network for connectivity
 
   # MongoDB Setup script for initialization (e.g., setting up sharding, replica sets)
   mongo-setup:
@@ -55,6 +56,7 @@ services:
     entrypoint: ["mongosh", "/docker-entrypoint-initdb.d/setup.js"]  # Execute MongoDB setup script
     networks:
       - mongo-cluster
+      - backend-network  # Attach to backend network for service communication
 
   # ----- Redis Broker -----
   # Redis service used by Celery for task queuing
@@ -86,12 +88,12 @@ services:
 
   # ----- Nginx Load Balancer for API -----
   # Load balancer (nginx) to distribute traffic between the backend replicas
-  api-lb:
+  backend-lb:
     image: nginx:alpine  # Use the official Nginx image
     ports:
       - "5000:5000"  # Expose the API on port 5000
     volumes:
-      - ./backend/nginx-lb.conf:/etc/nginx/nginx.conf:ro  # Mount Nginx configuration file
+      - ./backend/backend-lb.conf:/etc/nginx/nginx.conf:ro  # Mount Nginx configuration file
     depends_on:
       - backend
       - backend2  # Ensure both backend replicas are up before starting the load balancer
