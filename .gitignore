@@ -1,0 +1,46 @@
+# Python (Flask) specific
+*.pyc
+*.pyo
+*.pyd
+__pycache__
+env/
+venv/
+*.egg-info
+*.eggs
+dist/
+build/
+*.db
+*.sqlite3
+
+# Node.js specific
+node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+package-lock.json
+package.json.lock
+dist/
+build/
+
+# Docker specific
+.docker/
+docker-compose.override.yml
+Dockerfile.*
+.dockerignore
+docker-compose.yml
+
+# IDE/Editor specific files
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+*.iml
+*.swp
+*~
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
