@@ -1,8 +1,8 @@
-# Python (Flask) specific
+# Python
 *.pyc
 *.pyo
 *.pyd
-__pycache__
+__pycache__/
 env/
 venv/
 *.egg-info
@@ -12,33 +12,26 @@ build/
 *.db
 *.sqlite3
 
-# Node.js specific
+# Node.js
 node_modules/
-npm-debug.log
-yarn-debug.log
-yarn-error.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 package-lock.json
-package.json.lock
-dist/
-build/
 
-# Docker specific
-# .docker/
-# docker-compose.override.yml
-# Dockerfile.*
+# Docker
 .dockerignore
-# docker-compose.yml
 
-# IDE/Editor specific files
+# IDE / Editor
 .vscode/
 .idea/
+*.iml
 *.sublime-workspace
 *.sublime-project
-*.iml
 *.swp
 *~
 
-# OS-specific files
+# OS-specific
 .DS_Store
 Thumbs.db
 

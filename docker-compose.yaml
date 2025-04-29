@@ -2,132 +2,126 @@ version: '3.8'
 
 services:
   # ----- MongoDB Shard Cluster -----
-  # Configuration server (configsvr) for MongoDB Sharded Cluster
+  # Configuration server holding cluster metadata
   configsvr:
-    image: mongo:6  # Use MongoDB 6 image
-    command: mongod --configsvr --replSet configReplSet --port 27019  # Run as a config server with replica set
+    image: mongo:6
+    command: mongod --configsvr --replSet configReplSet --port 27019
     volumes:
-      - configsvr_data:/data/db  # Persistent storage for config server
+      - configsvr_data:/data/db  # Persist config server data
     networks:
-      - mongo-cluster  # Use the 'mongo-cluster' network for communication
+      - mongo-cluster           # Isolated network for MongoDB internal communication
 
-  # First shard in MongoDB Sharded Cluster
+  # First shard for horizontal scaling
   shard1:
     image: mongo:6
-    command: mongod --shardsvr --replSet shard1ReplSet --port 27018  # Run as a shard server with replica set
+    command: mongod --shardsvr --replSet shard1ReplSet --port 27018
     volumes:
-      - shard1_data:/data/db  # Persistent storage for shard 1
+      - shard1_data:/data/db     # Persist shard 1 data
     networks:
       - mongo-cluster
 
-  # Second shard in MongoDB Sharded Cluster
+  # Second shard for horizontal scaling
   shard2:
     image: mongo:6
-    command: mongod --shardsvr --replSet shard2ReplSet --port 27018  # Run as a shard server with replica set
+    command: mongod --shardsvr --replSet shard2ReplSet --port 27018
     volumes:
-      - shard2_data:/data/db  # Persistent storage for shard 2
+      - shard2_data:/data/db     # Persist shard 2 data
     networks:
       - mongo-cluster
 
-  # Mongos - MongoDB Shard Router
+  # Mongos router that multiplexes queries to config server & shards
   mongos:
     image: mongo:6
-    command: mongos --configdb configReplSet/configsvr:27019 --port 27017  # Shard router that communicates with the config server and shards
+    command: mongos --configdb configReplSet/configsvr:27019 --port 27017
     depends_on:
-      - configsvr
-      - shard1
-      - shard2  # Ensure these services are up before starting mongos
+      - configsvr                 # Ensure config server is up
+      - shard1                    # Ensure first shard is up
+      - shard2                    # Ensure second shard is up
     ports:
-      - "27017:27017"  # Expose mongos service on port 27017
+      - "27017:27017"            # Expose mongos on host for clients
     networks:
       - mongo-cluster
-      - backend-network  # Add mongos to backend network for connectivity
+      - backend-network           # Also attach to backend network for API connectivity
 
-  # MongoDB Setup script for initialization (e.g., setting up sharding, replica sets)
+  # Initialization job: sets up replica sets & sharding
   mongo-setup:
     image: mongo:6
     depends_on:
       - configsvr
       - shard1
       - shard2
-      - mongos  # Ensure MongoDB services are up before running setup
+      - mongos
     volumes:
-      - ./mongo-init:/docker-entrypoint-initdb.d  # Mount setup scripts from local directory to container
-    entrypoint: ["mongosh", "/docker-entrypoint-initdb.d/setup.js"]  # Execute MongoDB setup script
+      - ./mongo-init:/docker-entrypoint-initdb.d  # Scripts to initialize cluster
+    entrypoint: ["mongosh", "/docker-entrypoint-initdb.d/setup.js"]
     networks:
       - mongo-cluster
-      - backend-network  # Attach to backend network for service communication
+      - backend-network
 
-  # ----- Redis Broker -----
-  # Redis service used by Celery for task queuing
+  # ----- Redis Broker for Celery -----
   redis:
-    image: redis:7  # Use Redis version 7
+    image: redis:7
     ports:
-      - "6379:6379"  # Expose Redis on port 6379
+      - "6379:6379"            # Expose Redis on default port
     networks:
-      - backend-network  # Use the backend network for communication
+      - backend-network         # Only backend services need access
 
-  # ----- Flask Backend Services -----
-  # Backend service (Flask API) that interacts with MongoDB and Redis
+  # ----- Flask Backend API -----
   backend: &backend
-    build: ./backend  # Build from the backend directory
+    build: ./backend           # Build context for Flask app
     environment:
-      - MONGO_URI=mongodb://mongos:27017  # MongoDB URI for connection
-      - REDIS_URL=redis://redis:6379/0  # Redis URL for task queue
+      - MONGO_URI=mongodb://mongos:27017   # Connect via mongos router
+      - REDIS_URL=redis://redis:6379/0     # Use Redis for Celery broker
     expose:
-      - "5000"  # Expose backend API on port 5000 internally
+      - "5000"               # Expose port internally
     depends_on:
       - mongos
-      - redis  # Ensure MongoDB and Redis are up before starting the backend
+      - redis
     networks:
-      - backend-network
+      - backend-network        # Internal backend network
 
-  # Second backend service replica (scalable backend)
+  # Second replica of Flask API for horizontal scaling
   backend2:
-    <<: *backend  # Inherit configuration from 'backend' service
+    <<: *backend                # Inherit configuration from 'backend'
 
-  # ----- Nginx Load Balancer for API -----
-  # Load balancer (nginx) to distribute traffic between the backend replicas
+  # Nginx load balancer for Flask replicas
   backend-lb:
-    image: nginx:alpine  # Use the official Nginx image
+    image: nginx:alpine
     ports:
-      - "5000:5000"  # Expose the API on port 5000
+      - "5000:5000"          # Expose API on host port 5000
     volumes:
-      - ./backend/backend-lb.conf:/etc/nginx/nginx.conf:ro  # Mount Nginx configuration file
+      - ./backend/backend-lb.conf:/etc/nginx/nginx.conf:ro  # Mount custom Nginx config
     depends_on:
       - backend
-      - backend2  # Ensure both backend replicas are up before starting the load balancer
+      - backend2
     networks:
       - backend-network
 
-  # ----- Celery Workers -----
-  # First Celery worker for handling asynchronous tasks (price checking, etc.)
+  # ----- Celery Worker Services -----
   celery_worker1: &celery_worker1
-    build: ./backend  # Build from the backend directory
-    command: celery -A celery_worker.app worker --loglevel=info  # Start the Celery worker
+    build: ./backend           # Reuse Flask Dockerfile for Celery
+    command: celery -A celery_worker.app worker --loglevel=info  # Start Celery worker
     environment:
-      - MONGO_URI=mongodb://mongos:27017  # MongoDB URI for task processing
-      - REDIS_URL=redis://redis:6379/0  # Redis URL for task queue
+      - MONGO_URI=mongodb://mongos:27017
+      - REDIS_URL=redis://redis:6379/0
     depends_on:
       - redis
-      - mongos  # Ensure Redis and MongoDB are up before starting the worker
+      - mongos
     networks:
       - backend-network
 
-  # Second Celery worker replica (scalable worker)
+  # Second Celery worker for high availability
   celery_worker2:
-    <<: *celery_worker1  # Inherit configuration from 'celery_worker1'
+    <<: *celery_worker1
 
-  # ----- Frontend Static Servers and Load Balancer -----
-  # First frontend static server (serves static files like HTML, JS, CSS)
+  # ----- Frontend Static Servers & Load Balancer -----
   frontend1:
-    build: ./frontend  # Build from the frontend directory
+    build: ./frontend         # Build context for Express static server
     expose:
-      - "80"  # Expose port 80 internally for frontend services
+      - "80"                # Expose HTTP port internally
     networks:
-      - frontend-network
+      - frontend-network      # Frontend isolated network
 
-  # Second frontend static server (scalable frontend)
   frontend2:
     build: ./frontend
     expose:
@@ -135,27 +129,26 @@ services:
     networks:
       - frontend-network
 
-  # Frontend load balancer (Nginx) to distribute traffic between frontend replicas
+  # Nginx load balancer for frontend replicas
   frontend-lb:
-    image: nginx:alpine  # Use the official Nginx image
+    image: nginx:alpine
     ports:
-      - "8080:80"  # Expose frontend on port 8080
+      - "8080:80"            # Expose frontend on host port 8080
     volumes:
-      - ./frontend/frontend-lb.conf:/etc/nginx/nginx.conf:ro  # Mount Nginx frontend configuration file
+      - ./frontend/frontend-lb.conf:/etc/nginx/nginx.conf:ro  # Custom Nginx config
     depends_on:
       - frontend1
-      - frontend2  # Ensure frontend services are up before starting the load balancer
+      - frontend2
     networks:
-      - frontend-network
+      - frontend-network      # HTTP traffic network
+      - backend-network       # Also attach to backend to proxy API calls
 
-# Define custom networks for isolated communication
 networks:
-  mongo-cluster:
-  backend-network:
-  frontend-network:
+  mongo-cluster:               # Network for MongoDB internal communication
+  backend-network:             # Shared by backend services (API, Celery, mongos)
+  frontend-network:            # Shared by front-end servers & load balancer
 
-# Define persistent volumes for MongoDB data storage
 volumes:
-  configsvr_data:
-  shard1_data:
-  shard2_data:
+  configsvr_data:              # Persistent volume for config server
+  shard1_data:                 # Persistent volume for shard1
+  shard2_data:                 # Persistent volume for shard2
