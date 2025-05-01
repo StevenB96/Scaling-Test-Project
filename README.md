@@ -37,3 +37,18 @@ This stack implements a price-tracking application that monitors product prices 
 git clone https://github.com/your-username/ecommerce-price-tracker.git
 cd ecommerce-price-tracker
 docker-compose up -d
+
+
+
+
+
+notes from first run atempt
+
+BACKEND 1 ERROR
+Flask ERROR on GET /products:
+Traceback (most recent call last):
+  File "/app/app.py", line 22, in get_products
+    products = list(db.products.find({}, {"_id": 0}))
+pymongo.errors.ServerSelectionTimeoutError:
+  mongos:27017: [Errno 111] Connection refused
+  Timeout: 30s
