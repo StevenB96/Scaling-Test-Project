@@ -36,7 +36,7 @@ This stack implements a price-tracking application that monitors product prices 
 
 git clone https://github.com/your-username/ecommerce-price-tracker.git
 cd ecommerce-price-tracker
-docker-compose up -d
+docker-compose up -d OR docker-compose up --build -d
 
 
 
